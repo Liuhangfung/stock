@@ -135,7 +135,7 @@ def load_stock_prices_from_google_sheets(sheet_id):
                     prices = pd.to_numeric(prices, errors='coerce')
                     
                     # Forward fill ALL missing values (no change = use previous price)
-                    prices = prices.fillna(method='ffill')
+                    prices = prices.ffill()
                     
                     formatted_data[stock] = prices
         
@@ -160,7 +160,7 @@ def load_stock_prices_fallback():
     for col in price_columns:
         df[col] = pd.to_numeric(df[col], errors='coerce')
         # Forward fill ALL missing values (no change = use previous price)
-        df[col] = df[col].fillna(method='ffill')
+        df[col] = df[col].ffill()
     return df
 
 def calculate_performance_from_entries(stock_transactions, price_data):
@@ -224,6 +224,13 @@ def calculate_performance_from_entries(stock_transactions, price_data):
                         if temp_units > 0:
                             current_avg_cost = temp_cost / temp_units
                             current_return = ((market_price - current_avg_cost) / current_avg_cost) * 100
+                            
+                            # Cap extreme returns to prevent chart scaling issues
+                            if current_return > 1000:  # Cap at 1000%
+                                current_return = 1000
+                            elif current_return < -100:  # Cap at -100%
+                                current_return = -100
+                                
                             performance_series.append(current_return)
                             dates_series.append(price_date)
                         elif len(performance_series) > 0:
@@ -261,8 +268,12 @@ def calculate_performance_from_entries(stock_transactions, price_data):
                     
                     weighted_avg_cost = running_cost / running_units if running_units > 0 else 0
                     
+                    # Debug output for server troubleshooting
+                    print(f"  {stock_code}: {running_units:,} units @ avg HK${weighted_avg_cost:.2f}")
+                    
                     # Get current price and calculate current percentage
                     current_price = stock_prices.iloc[-1]
+                    print(f"    Current market price: HK${current_price:.2f}")
                     if weighted_avg_cost > 0:
                         current_pct_change = ((current_price - weighted_avg_cost) / weighted_avg_cost) * 100
                     else:
@@ -692,9 +703,14 @@ def main():
         print(f"  {stock}: {info['current_units']:,.0f} units @ avg HK${avg_price:.2f} (entry: {earliest_date})")
     
     print("\nLoading stock price data...")
-    # Load stock price data from Google Sheets (live data!)
-    GOOGLE_SHEET_ID = "1ZfEwBs4fo_py2qmTzAKj-eou8r4fNDoCvQdTUHpxDHs"
-    price_data = load_stock_prices_from_google_sheets(GOOGLE_SHEET_ID)
+    # Load stock price data - try local CSV first, then Google Sheets
+    if os.path.exists('stock_data.csv'):
+        print("📁 Using local stock_data.csv")
+        price_data = load_stock_prices_fallback()
+    else:
+        print("🌐 Local CSV not found, using Google Sheets...")
+        GOOGLE_SHEET_ID = "1ZfEwBs4fo_py2qmTzAKj-eou8r4fNDoCvQdTUHpxDHs"
+        price_data = load_stock_prices_from_google_sheets(GOOGLE_SHEET_ID)
     
     print("Calculating performance from YOUR entry dates...")
     performance_data = calculate_performance_from_entries(stock_transactions, price_data)
