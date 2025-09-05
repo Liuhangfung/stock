@@ -1,17 +1,15 @@
-# Bulletproof Docker for server Plotly rendering
+# Simplified Docker for server deployment
 FROM python:3.9-slim
 
 WORKDIR /app
 
-# Install system dependencies for Plotly/kaleido (server-friendly)
+# Install only essential system packages
 RUN apt-get update && apt-get install -y --no-install-recommends \
     wget \
-    curl \
-    ca-certificates \
     && rm -rf /var/lib/apt/lists/* \
     && apt-get clean
 
-# Install Python packages with kaleido for Plotly static export
+# Install Python packages
 RUN pip install --no-cache-dir \
     pandas==2.1.3 \
     numpy==1.24.3 \
@@ -20,12 +18,8 @@ RUN pip install --no-cache-dir \
     openpyxl==3.1.2 \
     kaleido==0.2.1
 
-# Set environment variables for headless Plotly
-ENV DISPLAY=:99
-ENV PLOTLY_RENDERER=kaleido
-
 # Copy application files
 COPY . .
 
-# Direct execution without virtual display (kaleido handles it)
+# Run the Docker-specific analysis
 CMD ["python", "hk_stock_analysis_docker.py"] 
